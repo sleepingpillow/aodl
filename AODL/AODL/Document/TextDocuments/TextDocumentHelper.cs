@@ -65,7 +65,7 @@ namespace AODL.Document.TextDocuments
 				+ " xmlns:xforms=\"http://www.w3.org/2002/xforms\""
 				+ " xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\""
 				+ " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
-				+ " office:version=\"1.0\">"
+				+ " office:version=\"1.4\">"
 				+ "<office:scripts />"
 				+ "<office:font-face-decls>"
 				+ "<style:font-face style:name=\"StarSymbol\" svg:font-family=\"StarSymbol\" style:font-charset=\"x-symbol\" />"
