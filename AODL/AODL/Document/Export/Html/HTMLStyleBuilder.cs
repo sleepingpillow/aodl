@@ -102,8 +102,8 @@ namespace AODL.Document.Export.Html
 						if(paragraphStyle.ParagraphProperties.Alignment != null
 							&& paragraphStyle.ParagraphProperties.Alignment != "start")
 							style	+= "text-align: "+paragraphStyle.ParagraphProperties.Alignment+"; ";
-						if(paragraphStyle.ParagraphProperties.MarginLeft != null)
-							style	+= "text-indent: "+paragraphStyle.ParagraphProperties.MarginLeft+"; ";
+						style += AODL.Document.Styles.Properties.ParagraphProperties.GetLayoutHtml(
+							paragraphStyle.ParagraphProperties.Node, paragraphStyle.Document.NamespaceManager);
 						if(paragraphStyle.ParagraphProperties.LineSpacing != null)
 							style	+= "line-height: "+paragraphStyle.ParagraphProperties.LineSpacing+"; ";
 						if(paragraphStyle.ParagraphProperties.Border != null 
@@ -426,6 +426,8 @@ namespace AODL.Document.Export.Html
 						style	+= "color: "+textStyle.FontColor+"; ";
 					if(textStyle.BackgroundColor != null)
 						style	+= "background-color: "+textStyle.BackgroundColor+"; ";
+					style += TextProperties.GetTypographyHtml(textStyle.Node, textStyle.Style.Document.NamespaceManager);
+					style += textStyle.GetHtmlHyphenationLimits();
 				}
 			}
 			catch(Exception ex)

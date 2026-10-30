@@ -524,6 +524,13 @@ namespace AODL.Document.Export.Html
 							html			= html.Replace(" ", "");
 						}
 
+					html += AODL.Document.Styles.Properties.TextProperties.GetHtmlLanguage(
+						paragraph.Document, paragraph.Style, paragraph.StyleName, "paragraph", true, paragraph.Node);
+					html = AODL.Document.Styles.Properties.TextProperties.AddHtmlCss(html,
+						AODL.Document.Styles.Properties.TextProperties.GetInheritedTypographyHtml(
+							paragraph.Document, paragraph.Style, paragraph.StyleName, "paragraph", true, paragraph.Node)
+						+ AODL.Document.Styles.Properties.TextProperties.GetHtmlHyphenationLimits(
+							paragraph.Document, paragraph.Style, paragraph.StyleName, "paragraph", true, paragraph.Node));
 					html					+= ">\n";
 
 					string txtstyle	= "<span ";
@@ -602,10 +609,17 @@ namespace AODL.Document.Export.Html
 					if(style.Length > 0)
 					{
 						html				+= style;
-						html				+= ">\n";
 					}
 					else
-						html				= html.Replace(" ", "")+">\n";
+						html				= html.Replace(" ", "");
+					html += AODL.Document.Styles.Properties.TextProperties.GetHtmlLanguage(
+						heading.Document, heading.Style, heading.StyleName, "paragraph", true, heading.Node);
+					html = AODL.Document.Styles.Properties.TextProperties.AddHtmlCss(html,
+						AODL.Document.Styles.Properties.TextProperties.GetInheritedTypographyHtml(
+							heading.Document, heading.Style, heading.StyleName, "paragraph", true, heading.Node)
+						+ AODL.Document.Styles.Properties.TextProperties.GetHtmlHyphenationLimits(
+							heading.Document, heading.Style, heading.StyleName, "paragraph", true, heading.Node));
+					html += ">\n";
 
 					
 					string headerText		= "";
@@ -1095,6 +1109,13 @@ namespace AODL.Document.Export.Html
 								html	+= commonstyle;
 						}
 					}
+					html += AODL.Document.Styles.Properties.TextProperties.GetHtmlLanguage(
+						formatedText.Document, formatedText.Style, formatedText.StyleName, "text", false, formatedText.Node);
+					html = AODL.Document.Styles.Properties.TextProperties.AddHtmlCss(html,
+						AODL.Document.Styles.Properties.TextProperties.GetInheritedTypographyHtml(
+							formatedText.Document, formatedText.Style, formatedText.StyleName, "text", false, formatedText.Node)
+						+ AODL.Document.Styles.Properties.TextProperties.GetHtmlHyphenationLimits(
+							formatedText.Document, formatedText.Style, formatedText.StyleName, "text", false, formatedText.Node));
 					html			+= ">\n";
 
 					string textContent	= this.GetITextCollectionAsHtml(formatedText.TextContent, null);

@@ -113,14 +113,18 @@ namespace AODL.Document.Content.Text
 		/// <returns>The html string</returns>
 		public string GetHtml()
 		{
-			string style	= ((TextStyle)this.Style).TextProperties.GetHtmlStyle();
+			TextStyle effectiveStyle = this.GetEffectiveTextStyle();
+			string style	= effectiveStyle == null ? "" : effectiveStyle.TextProperties.GetHtmlStyle();
 			string html		= "<span ";
 			string text		= this.GetTextWithHtmlControl();
 
+			html += TextProperties.GetHtmlLanguage(this.Document, effectiveStyle, this.StyleName, "text", false, this.Node);
 			if(style.Length > 0)
-				html		= html + style + ">\n";
-			else
-				html		+= ">\n";
+				html += " " + style;
+			html = TextProperties.AddHtmlCss(html,
+				TextProperties.GetInheritedTypographyHtml(this.Document, effectiveStyle, this.StyleName, "text", false, this.Node)
+				+ TextProperties.GetHtmlHyphenationLimits(this.Document, effectiveStyle, this.StyleName, "text", false, this.Node));
+			html += ">\n";
 
 			if(text.Length > 0)
 				html		+= text;
@@ -162,9 +166,10 @@ namespace AODL.Document.Content.Text
 		/// <returns></returns>
 		private string GetSubOrSupStartTag()
 		{
-			if(((TextStyle)this.Style).TextProperties.Position != null)
-				if(((TextStyle)this.Style).TextProperties.Position.Length > 0)
-					if(((TextStyle)this.Style).TextProperties.Position.ToLower().StartsWith("sub"))
+			TextStyle style = this.GetEffectiveTextStyle();
+			if(style != null && style.TextProperties.Position != null)
+				if(style.TextProperties.Position.Length > 0)
+					if(style.TextProperties.Position.ToLower().StartsWith("sub"))
 						return "<sub>";
 					else
 						return "<sup>";
@@ -178,14 +183,23 @@ namespace AODL.Document.Content.Text
 		/// <returns></returns>
 		private string GetSubOrSupEndTag()
 		{
-			if(((TextStyle)this.Style).TextProperties.Position != null)
-				if(((TextStyle)this.Style).TextProperties.Position.Length > 0)
-					if(((TextStyle)this.Style).TextProperties.Position.ToLower().StartsWith("sub"))
+			TextStyle style = this.GetEffectiveTextStyle();
+			if(style != null && style.TextProperties.Position != null)
+				if(style.TextProperties.Position.Length > 0)
+					if(style.TextProperties.Position.ToLower().StartsWith("sub"))
 						return "</sub>";
 					else
 						return "</sup>";
 
 			return "";
+		}
+
+		private TextStyle GetEffectiveTextStyle()
+		{
+			TextStyle style = this.Style as TextStyle;
+			if (style == null && this.Document.CommonStyles != null)
+				style = this.Document.CommonStyles.GetStyleByName(this.StyleName) as TextStyle;
+			return style;
 		}
 
 		#endregion

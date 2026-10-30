@@ -16,8 +16,12 @@
  */
 
 using System;
+using System.Collections;
+using System.Globalization;
 using System.Xml;
+using AODL.Document;
 using AODL.Document.Styles;
+using AODL.Document.TextDocuments;
 
 namespace AODL.Document.Styles.Properties
 {
@@ -346,6 +350,48 @@ namespace AODL.Document.Styles.Properties
 			}
 		}
 
+		/// <summary>Gets or sets the western text language, for example "sv" or "none". Set to null to inherit.</summary>
+		public string Language
+		{
+			get { return this.GetFoAttribute("language"); }
+			set { this.SetFoAttribute("language", value); }
+		}
+
+		/// <summary>Gets or sets the western text country, for example "SE" or "none". Set to null to inherit.</summary>
+		public string Country
+		{
+			get { return this.GetFoAttribute("country"); }
+			set { this.SetFoAttribute("country", value); }
+		}
+
+		/// <summary>Gets or sets the letter spacing, for example "0.5pt" or "normal". Set to null to inherit.</summary>
+		public string LetterSpacing
+		{
+			get { return this.GetFoAttribute("letter-spacing"); }
+			set { this.SetFoAttribute("letter-spacing", value); }
+		}
+
+		/// <summary>Gets or sets automatic hyphenation as an XML boolean. Set to null to inherit.</summary>
+		public string Hyphenate
+		{
+			get { return this.GetFoAttribute("hyphenate"); }
+			set { this.SetFoAttribute("hyphenate", value); }
+		}
+
+		/// <summary>Gets or sets the minimum characters before a hyphen. Set to null to inherit.</summary>
+		public string HyphenationRemainCharCount
+		{
+			get { return this.GetFoAttribute("hyphenation-remain-char-count"); }
+			set { this.SetFoAttribute("hyphenation-remain-char-count", value); }
+		}
+
+		/// <summary>Gets or sets the minimum characters after a hyphen. Set to null to inherit.</summary>
+		public string HyphenationPushCharCount
+		{
+			get { return this.GetFoAttribute("hyphenation-push-char-count"); }
+			set { this.SetFoAttribute("hyphenation-push-char-count", value); }
+		}
+
 		/// <summary>
 		/// Create a new TextProperties object that belongs to the given TextStyle object.
 		/// </summary>
@@ -389,6 +435,237 @@ namespace AODL.Document.Styles.Properties
 			XmlAttribute xa = this.Style.Document.CreateAttribute(name, prefix);
 			xa.Value		= text;
 			this.Node.Attributes.Append(xa);
+		}
+
+		private string GetFoAttribute(string name)
+		{
+			XmlNode attribute = this.Node.SelectSingleNode("@fo:" + name, this.Style.Document.NamespaceManager);
+			return attribute == null ? null : attribute.Value;
+		}
+
+		private void SetFoAttribute(string name, string value)
+		{
+			XmlAttribute attribute = this.Node.SelectSingleNode("@fo:" + name,
+				this.Style.Document.NamespaceManager) as XmlAttribute;
+			if (value == null)
+			{
+				if (attribute != null)
+					this.Node.Attributes.Remove(attribute);
+			}
+			else if (attribute == null)
+				this.CreateAttribute(name, value, "fo");
+			else
+				attribute.Value = value;
+		}
+
+		internal static string GetTypographyHtml(XmlNode node, XmlNamespaceManager namespaces)
+		{
+			XmlNode spacing = node.SelectSingleNode("@fo:letter-spacing", namespaces);
+			XmlNode hyphenate = node.SelectSingleNode("@fo:hyphenate", namespaces);
+			return FormatTypographyHtml(spacing == null ? null : spacing.Value,
+				hyphenate == null ? null : hyphenate.Value);
+		}
+
+		internal static string GetInheritedTypographyHtml(IDocument document, IStyle style, string styleName,
+			string family, bool includeDefault, XmlNode contentNode)
+		{
+			string spacing;
+			string hyphenate;
+			ResolveHtmlValues(document, style, styleName, family, includeDefault, contentNode,
+				"letter-spacing", "hyphenate", out spacing, out hyphenate);
+			return FormatTypographyHtml(spacing, hyphenate);
+		}
+
+		private static string FormatTypographyHtml(string spacing, string hyphenate)
+		{
+			string html = "";
+			if (spacing != null)
+				html += "letter-spacing: " + spacing + "; ";
+			if (hyphenate != null)
+			{
+				if (hyphenate == "true" || hyphenate == "1")
+					html += "hyphens: auto; ";
+				else if (hyphenate == "false" || hyphenate == "0")
+					html += "hyphens: manual; ";
+			}
+			return html;
+		}
+
+		internal static string GetHtmlLanguage(IDocument document, IStyle style, string styleName,
+			string family, bool includeDefault, XmlNode contentNode)
+		{
+			string language;
+			string country;
+			ResolveHtmlValues(document, style, styleName, family, includeDefault, contentNode,
+				"language", "country", out language, out country);
+			if (language == null) return "";
+			if (language == "none") language = "";
+			else if (!String.IsNullOrEmpty(country) && country != "none") language += "-" + country;
+			return " lang=\"" + System.Security.SecurityElement.Escape(language) + "\"";
+		}
+
+		internal static string GetHtmlHyphenationLimits(IDocument document, IStyle style, string styleName,
+			string family, bool includeDefault, XmlNode contentNode)
+		{
+			string before;
+			string after;
+			ResolveHtmlValues(document, style, styleName, family, includeDefault, contentNode,
+				"hyphenation-remain-char-count", "hyphenation-push-char-count", out before, out after);
+			if (before == null && after == null) return "";
+			return "hyphenate-limit-chars: auto " + HtmlHyphenationCount(before) + " " +
+				HtmlHyphenationCount(after) + "; ";
+		}
+
+		internal string GetHtmlHyphenationLimits()
+		{
+			XmlAttribute family = this.Style.Node.Attributes["family",
+				"urn:oasis:names:tc:opendocument:xmlns:style:1.0"];
+			if (family == null || (family.Value != "paragraph" && family.Value != "text")) return "";
+			return GetHtmlHyphenationLimits(this.Style.Document, this.Style, this.Style.StyleName,
+				family.Value, family.Value == "paragraph", null);
+		}
+
+		private static string HtmlHyphenationCount(string value)
+		{
+			if (value == null) return "auto";
+			int count;
+			if (!Int32.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out count) || count < 1)
+				throw new FormatException("HTML hyphenation character limits must be positive integers: " + value);
+			return count.ToString(CultureInfo.InvariantCulture);
+		}
+
+		internal static string AddHtmlCss(string tag, string css)
+		{
+			if (css.Length == 0) return tag;
+			int tagStart = tag.LastIndexOf('<');
+			int styleStart = tag.IndexOf("style=\"", tagStart < 0 ? 0 : tagStart, StringComparison.Ordinal);
+			if (styleStart < 0) return tag + " style=\"" + css + "\"";
+			int styleEnd = tag.IndexOf('"', styleStart + 7);
+			if (styleEnd < 0) throw new InvalidOperationException("Unterminated HTML style attribute.");
+			return tag.Insert(styleEnd, css);
+		}
+
+		private static void ResolveHtmlValues(IDocument document, IStyle style, string styleName,
+			string family, bool includeDefault, XmlNode contentNode, string firstName, string secondName,
+			out string first, out string second)
+		{
+			ResolveStyleValues(document, style, styleName, family, includeDefault, firstName, secondName,
+				out first, out second);
+			if (family == "text" && (first != null || second != null) &&
+				(first == null || second == null))
+			{
+				const string textNs = "urn:oasis:names:tc:opendocument:xmlns:text:1.0";
+				for (XmlNode parent = contentNode == null ? null : contentNode.ParentNode;
+					parent != null && (first == null || second == null); parent = parent.ParentNode)
+				{
+					if (parent.NamespaceURI != textNs || parent.Attributes == null) continue;
+					bool isParagraph = parent.LocalName == "p" || parent.LocalName == "h";
+					if (!isParagraph && parent.LocalName != "span") continue;
+					XmlAttribute parentStyleName = parent.Attributes["style-name", textNs];
+					string parentFirst;
+					string parentSecond;
+					ResolveStyleValues(document, null, parentStyleName == null ? null : parentStyleName.Value,
+						isParagraph ? "paragraph" : "text", isParagraph, firstName, secondName,
+						out parentFirst, out parentSecond);
+					if (first == null) first = parentFirst;
+					if (second == null) second = parentSecond;
+				}
+			}
+		}
+
+		private static void ResolveStyleValues(IDocument document, IStyle style, string styleName,
+			string family, bool includeDefault, string firstName, string secondName, out string first, out string second)
+		{
+			const string styleNs = "urn:oasis:names:tc:opendocument:xmlns:style:1.0";
+			const string foNs = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0";
+			XmlDocument styles = null;
+			TextDocument text = document as TextDocument;
+			if (text != null && text.DocumentStyles != null)
+				styles = text.DocumentStyles.Styles;
+
+			XmlNode current = style == null ? FindStyle(document, styles, styleName, family, true) : style.Node;
+			first = null;
+			second = null;
+			Hashtable visited = new Hashtable();
+			while (current != null)
+			{
+				if (visited.ContainsKey(current))
+					throw new InvalidOperationException("Circular style inheritance while resolving HTML text properties.");
+				visited[current] = true;
+				XmlNode properties = current.SelectSingleNode("style:text-properties", document.NamespaceManager);
+				if (properties != null)
+				{
+					XmlAttribute firstAttribute = properties.Attributes[firstName, foNs];
+					XmlAttribute secondAttribute = properties.Attributes[secondName, foNs];
+					if (first == null && firstAttribute != null)
+						first = firstAttribute.Value;
+					if (second == null && secondAttribute != null)
+						second = secondAttribute.Value;
+				}
+				XmlAttribute parent = current.Attributes["parent-style-name", styleNs];
+				current = parent == null ? null : FindStyle(document, styles, parent.Value, family, false);
+			}
+
+			if (includeDefault && styles != null && (first == null || second == null))
+			{
+				XmlNodeList defaults = styles.SelectNodes("/office:document-styles/office:styles/style:default-style",
+					document.NamespaceManager);
+				foreach (XmlNode defaultStyle in defaults)
+				{
+					XmlAttribute defaultFamily = defaultStyle.Attributes["family", styleNs];
+					if (defaultFamily == null || defaultFamily.Value != family) continue;
+					XmlNode properties = defaultStyle.SelectSingleNode("style:text-properties", document.NamespaceManager);
+					if (properties != null)
+					{
+						XmlAttribute firstAttribute = properties.Attributes[firstName, foNs];
+						XmlAttribute secondAttribute = properties.Attributes[secondName, foNs];
+						if (first == null && firstAttribute != null) first = firstAttribute.Value;
+						if (second == null && secondAttribute != null) second = secondAttribute.Value;
+					}
+					break;
+				}
+			}
+
+		}
+
+		private static XmlNode FindStyle(IDocument document, XmlDocument styles, string name, string family, bool automatic)
+		{
+			if (String.IsNullOrEmpty(name)) return null;
+			if (automatic)
+			{
+				XmlNode node = FindStyleInCollection(document.Styles, name, family);
+				if (node != null) return node;
+			}
+			XmlNode common = FindStyleInCollection(document.CommonStyles, name, family);
+			if (common != null) return common;
+			if (styles != null)
+			{
+				XmlNodeList nodes = styles.SelectNodes("/office:document-styles/office:styles/style:style",
+					document.NamespaceManager);
+				const string styleNs = "urn:oasis:names:tc:opendocument:xmlns:style:1.0";
+				foreach (XmlNode node in nodes)
+				{
+					XmlAttribute nodeName = node.Attributes["name", styleNs];
+					XmlAttribute nodeFamily = node.Attributes["family", styleNs];
+					if (nodeName != null && nodeFamily != null && nodeName.Value == name && nodeFamily.Value == family)
+						return node;
+				}
+			}
+			return null;
+		}
+
+		private static XmlNode FindStyleInCollection(IStyleCollection styles, string name, string family)
+		{
+			if (styles == null) return null;
+			const string styleNs = "urn:oasis:names:tc:opendocument:xmlns:style:1.0";
+			foreach (IStyle style in styles)
+			{
+				if (style.Node == null || style.Node.Attributes == null) continue;
+				XmlAttribute nodeFamily = style.Node.Attributes["family", styleNs];
+				if (style.StyleName == name && nodeFamily != null && nodeFamily.Value == family)
+					return style.Node;
+			}
+			return null;
 		}
 
 		#region IProperty Member
@@ -448,6 +725,8 @@ namespace AODL.Document.Styles.Properties
 				style	+= "color: "+this.FontColor+"; ";
 			if(this.BackgroundColor != null)
 				style	+= "background-color: "+this.BackgroundColor+"; ";
+			style += GetTypographyHtml(this.Node, this.Style.Document.NamespaceManager);
+			style += this.GetHtmlHyphenationLimits();
 
 			if(!style.EndsWith("; "))
 				style	= "";
