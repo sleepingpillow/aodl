@@ -284,6 +284,13 @@ namespace AODL.Document.Content.Text
 				
 				if(style.Length > 0)
 					html		+= style;
+				html += AODL.Document.Styles.Properties.TextProperties.GetHtmlLanguage(
+					this.Document, this.Style, this.StyleName, "paragraph", true, this.Node);
+				html = AODL.Document.Styles.Properties.TextProperties.AddHtmlCss(html,
+					AODL.Document.Styles.Properties.TextProperties.GetInheritedTypographyHtml(
+						this.Document, this.Style, this.StyleName, "paragraph", true, this.Node)
+					+ AODL.Document.Styles.Properties.TextProperties.GetHtmlHyphenationLimits(
+						this.Document, this.Style, this.StyleName, "paragraph", true, this.Node));
 				html			+= ">\n";
 
 				//Check numbering
@@ -301,9 +308,8 @@ namespace AODL.Document.Content.Text
 			}
 			catch(Exception ex)
 			{
+				throw;
 			}
-
-			return "";
 		}
 
 		/// <summary>

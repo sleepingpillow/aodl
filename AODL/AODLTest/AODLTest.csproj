@@ -145,6 +145,8 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="OpenDocumentPackageTests.cs" />
+    <Compile Include="ParagraphLayoutTests.cs" />
+    <Compile Include="TextTypographyTests.cs" />
     <Compile Include="FrameTest.cs">
       <SubType>Code</SubType>
     </Compile>

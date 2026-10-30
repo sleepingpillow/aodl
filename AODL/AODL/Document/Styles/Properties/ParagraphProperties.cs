@@ -59,6 +59,62 @@ namespace AODL.Document.Styles.Properties
 			}
 		}
 
+		/// <summary>Gets or sets the right paragraph margin, for example "1cm". Set to null to inherit.</summary>
+		public string MarginRight
+		{
+			get { return this.GetFoAttribute("margin-right"); }
+			set { this.SetFoAttribute("margin-right", value); }
+		}
+
+		/// <summary>Gets or sets the space above the paragraph. Set to null to inherit.</summary>
+		public string MarginTop
+		{
+			get { return this.GetFoAttribute("margin-top"); }
+			set { this.SetFoAttribute("margin-top", value); }
+		}
+
+		/// <summary>Gets or sets the space below the paragraph. Set to null to inherit.</summary>
+		public string MarginBottom
+		{
+			get { return this.GetFoAttribute("margin-bottom"); }
+			set { this.SetFoAttribute("margin-bottom", value); }
+		}
+
+		/// <summary>Gets or sets the first-line indent, for example "0.5cm". Set to null to inherit.</summary>
+		public string TextIndent
+		{
+			get { return this.GetFoAttribute("text-indent"); }
+			set { this.SetFoAttribute("text-indent", value); }
+		}
+
+		/// <summary>Gets or sets whether to keep this paragraph with the next, using "always" or "auto". Set to null to inherit.</summary>
+		public string KeepWithNext
+		{
+			get { return this.GetFoAttribute("keep-with-next"); }
+			set { this.SetFoAttribute("keep-with-next", value); }
+		}
+
+		/// <summary>Gets or sets whether to keep the paragraph together, using "always" or "auto". Set to null to inherit.</summary>
+		public string KeepTogether
+		{
+			get { return this.GetFoAttribute("keep-together"); }
+			set { this.SetFoAttribute("keep-together", value); }
+		}
+
+		/// <summary>Gets or sets the minimum number of lines after a page break. Set to null to inherit.</summary>
+		public string Widows
+		{
+			get { return this.GetFoAttribute("widows"); }
+			set { this.SetFoAttribute("widows", value); }
+		}
+
+		/// <summary>Gets or sets the minimum number of lines before a page break. Set to null to inherit.</summary>
+		public string Orphans
+		{
+			get { return this.GetFoAttribute("orphans"); }
+			set { this.SetFoAttribute("orphans", value); }
+		}
+
 		/// <summary>
 		/// Gets or sets the break before.
 		/// e.g. set this to "page" if this paragraph
@@ -304,6 +360,53 @@ namespace AODL.Document.Styles.Properties
 			this.Node.Attributes.Append(xa);
 		}
 
+		private string GetFoAttribute(string name)
+		{
+			XmlNode attribute = this.Node.SelectSingleNode("@fo:" + name, this.Style.Document.NamespaceManager);
+			return attribute == null ? null : attribute.Value;
+		}
+
+		private void SetFoAttribute(string name, string value)
+		{
+			XmlAttribute attribute = this.Node.SelectSingleNode("@fo:" + name,
+				this.Style.Document.NamespaceManager) as XmlAttribute;
+			if (value == null)
+			{
+				if (attribute != null)
+					this.Node.Attributes.Remove(attribute);
+			}
+			else if (attribute == null)
+				this.CreateAttribute(name, value, "fo");
+			else
+				attribute.Value = value;
+		}
+
+		internal static string GetLayoutHtml(XmlNode node, XmlNamespaceManager namespaces)
+		{
+			string html = "";
+			string[] lengths = { "margin-left", "margin-right", "margin-top", "margin-bottom", "text-indent" };
+			foreach (string name in lengths)
+			{
+				XmlNode attribute = node.SelectSingleNode("@fo:" + name, namespaces);
+				if (attribute != null)
+					html += name + ": " + attribute.Value + "; ";
+			}
+			string[] counts = { "widows", "orphans" };
+			foreach (string name in counts)
+			{
+				XmlNode attribute = node.SelectSingleNode("@fo:" + name, namespaces);
+				if (attribute != null)
+					html += name + ": " + attribute.Value + "; ";
+			}
+			XmlNode keepNext = node.SelectSingleNode("@fo:keep-with-next", namespaces);
+			if (keepNext != null && (keepNext.Value == "always" || keepNext.Value == "auto"))
+				html += "break-after: " + (keepNext.Value == "always" ? "avoid-page" : "auto") + "; ";
+			XmlNode keepTogether = node.SelectSingleNode("@fo:keep-together", namespaces);
+			if (keepTogether != null && (keepTogether.Value == "always" || keepTogether.Value == "auto"))
+				html += "break-inside: " + (keepTogether.Value == "always" ? "avoid-page" : "auto") + "; ";
+			return html;
+		}
+
 		/// <summary>
 		/// News the XML node.
 		/// </summary>
@@ -354,8 +457,7 @@ namespace AODL.Document.Styles.Properties
 
 			if(this.Alignment != null)
 				style	+= "text-align: "+this.Alignment+"; ";
-			if(this.MarginLeft != null)
-				style	+= "text-indent: "+this.MarginLeft+"; ";
+			style += GetLayoutHtml(this.Node, this.Style.Document.NamespaceManager);
 			if(this.LineSpacing != null)
 				style	+= "line-height: "+this.LineSpacing+"; ";
 			if(this.Border != null && this.Padding == null)

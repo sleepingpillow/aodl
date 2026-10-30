@@ -392,7 +392,6 @@ namespace AODL.Document.Content.Text
 						textStyle		= this.ParagraphStyle.TextProperties.GetHtmlStyle();
 						if(textStyle.Length > 0)
 						{
-							html		+= "<span "+textStyle;
 							useSpan		= true;
 						}
 					}
@@ -408,7 +407,16 @@ namespace AODL.Document.Content.Text
 					html		+= global;
 			}
 
-			html				+= ">\n";			
+			html += AODL.Document.Styles.Properties.TextProperties.GetHtmlLanguage(
+				this.Document, this.Style, this.StyleName, "paragraph", true, this.Node);
+			html = AODL.Document.Styles.Properties.TextProperties.AddHtmlCss(html,
+				AODL.Document.Styles.Properties.TextProperties.GetInheritedTypographyHtml(
+					this.Document, this.Style, this.StyleName, "paragraph", true, this.Node)
+				+ AODL.Document.Styles.Properties.TextProperties.GetHtmlHyphenationLimits(
+					this.Document, this.Style, this.StyleName, "paragraph", true, this.Node));
+			html += ">\n";
+			if (useSpan)
+				html += "<span " + textStyle + ">\n";
 
 			//There check all content if they
 			//support HTML
@@ -541,21 +549,8 @@ namespace AODL.Document.Content.Text
 							if(lineSpace != null)
 								style	+= "line-height: "+lineSpace+"; ";
 
-							string marginTop	= this.GetGlobalStyleElement(paraPropNodeP, "@fo:margin-top");
-							if(marginTop != null)
-								style	+= "margin-top: "+marginTop+"; ";
-
-							string marginBottom	= this.GetGlobalStyleElement(paraPropNodeP, "@fo:margin-bottom");
-							if(marginBottom != null)
-								style	+= "margin-bottom: "+marginBottom+"; ";
-
-							string marginLeft	= this.GetGlobalStyleElement(paraPropNodeP, "@fo:margin-left");
-							if(marginLeft != null)
-								style	+= "margin-left: "+marginLeft+"; ";
-
-							string marginRight	= this.GetGlobalStyleElement(paraPropNodeP, "@fo:margin-right");
-							if(marginRight != null)
-								style	+= "margin-right: "+marginRight+"; ";
+							style += AODL.Document.Styles.Properties.ParagraphProperties.GetLayoutHtml(
+								paraPropNodeP, this.Document.NamespaceManager);
 						}
 						//Check paragraph properties, maybe parents style is overwritten or extended
 						if(paraPropNode != null)
@@ -572,21 +567,8 @@ namespace AODL.Document.Content.Text
 							if(lineSpace != null)
 								style	+= "line-height: "+lineSpace+"; ";
 
-							string marginTop	= this.GetGlobalStyleElement(paraPropNode, "@fo:margin-top");
-							if(marginTop != null)
-								style	+= "margin-top: "+marginTop+"; ";
-
-							string marginBottom	= this.GetGlobalStyleElement(paraPropNode, "@fo:margin-bottom");
-							if(marginBottom != null)
-								style	+= "margin-bottom: "+marginBottom+"; ";
-
-							string marginLeft	= this.GetGlobalStyleElement(paraPropNode, "@fo:margin-left");
-							if(marginLeft != null)
-								style	+= "margin-left: "+marginLeft+"; ";
-
-							string marginRight	= this.GetGlobalStyleElement(paraPropNode, "@fo:margin-right");
-							if(marginRight != null)
-								style	+= "margin-right: "+marginRight+"; ";
+							style += AODL.Document.Styles.Properties.ParagraphProperties.GetLayoutHtml(
+								paraPropNode, this.Document.NamespaceManager);
 						}
 
 						XmlNode textPropNode	= styleNode.SelectSingleNode("style:text-properties",
@@ -600,6 +582,8 @@ namespace AODL.Document.Content.Text
 						//Check first text properties of parent style
 						if(textPropNodeP != null)
 						{
+							style += AODL.Document.Styles.Properties.TextProperties.GetTypographyHtml(
+								textPropNodeP, this.Document.NamespaceManager);
 							string fontSize		= this.GetGlobalStyleElement(textPropNodeP, "@fo:font-size");
 							if(fontSize != null)
 								style	+= "font-size: "+FontFamilies.PtToPx(fontSize)+"; ";
@@ -627,6 +611,8 @@ namespace AODL.Document.Content.Text
 						//Check now text properties of style, maybe some setting are overwritten or extended
 						if(textPropNode != null)
 						{
+							style += AODL.Document.Styles.Properties.TextProperties.GetTypographyHtml(
+								textPropNode, this.Document.NamespaceManager);
 							string fontSize		= this.GetGlobalStyleElement(textPropNode, "@fo:font-size");
 							if(fontSize != null)
 								style	+= "font-size: "+FontFamilies.PtToPx(fontSize)+"; ";
