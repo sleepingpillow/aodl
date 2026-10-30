@@ -47,14 +47,15 @@ namespace AODL.Document.Import.OpenDocument
 //		internal static readonly string dir		= Environment.CurrentDirectory+@"\aodlread\";
 //		internal static readonly string dirpics	= Environment.CurrentDirectory+@"\PicturesRead\";
 		internal static Guid folderGuid			= Guid.NewGuid();
-		internal static readonly string dir		= Environment.CurrentDirectory+@"\"+folderGuid.ToString()+@"\";
-		internal static readonly string dirpics	= dir+@"PicturesRead\";
+		internal static readonly string dir		= Path.Combine(Environment.CurrentDirectory, folderGuid.ToString());
+		internal static readonly string dirpics	= Path.Combine(dir, "PicturesRead");
 
 
 		/// <summary>
 		/// The document to fill with content.
 		/// </summary>
 		internal IDocument _document;
+		private Hashtable _unpackedFiles = new Hashtable();
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="OpenDocumentImporter"/> class.
@@ -183,44 +184,42 @@ namespace AODL.Document.Import.OpenDocument
 		{
 			try
 			{
+				this._unpackedFiles.Clear();
 				if(!Directory.Exists(dir))
 					Directory.CreateDirectory(dir);
 
-				ZipInputStream s = new ZipInputStream(File.OpenRead(file));
-		
-				ZipEntry theEntry;
-				while ((theEntry = s.GetNextEntry()) != null) 
+				string root = Path.GetFullPath(dir) + Path.DirectorySeparatorChar;
+				StringComparison pathComparison = Path.DirectorySeparatorChar == '\\'
+					? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+				using (ZipInputStream s = new ZipInputStream(File.OpenRead(file)))
 				{
-			
-					string directoryName = Path.GetDirectoryName(theEntry.Name);
-					string fileName      = Path.GetFileName(theEntry.Name);
-
-					if(directoryName != String.Empty)
-						Directory.CreateDirectory(dir+directoryName);
-			
-					if (fileName != String.Empty) 
+					ZipEntry theEntry;
+					while ((theEntry = s.GetNextEntry()) != null)
 					{
-						FileStream streamWriter = File.Create(dir+theEntry.Name);
-				
-						int size = 2048;
-						byte[] data = new byte[2048];
-						while (true) 
+						string entryName = theEntry.Name.Replace('\\', Path.DirectorySeparatorChar)
+							.Replace('/', Path.DirectorySeparatorChar);
+						string fullPath = Path.GetFullPath(Path.Combine(dir, entryName));
+						if (Path.IsPathRooted(entryName) || !fullPath.StartsWith(root, pathComparison))
+							throw new InvalidDataException("Invalid package entry path: " + theEntry.Name);
+						string directoryName = Path.GetDirectoryName(entryName);
+						string fileName = Path.GetFileName(entryName);
+
+						if (directoryName != String.Empty)
+							Directory.CreateDirectory(Path.Combine(dir, directoryName));
+
+						if (fileName != String.Empty)
 						{
-							size = s.Read(data, 0, data.Length);
-							if (size > 0) 
+							using (FileStream streamWriter = File.Create(fullPath))
 							{
-								streamWriter.Write(data, 0, size);
-							} 
-							else 
-							{
-								break;
+								byte[] data = new byte[2048];
+								int size;
+								while ((size = s.Read(data, 0, data.Length)) > 0)
+									streamWriter.Write(data, 0, size);
 							}
+							this._unpackedFiles[theEntry.Name] = true;
 						}
-				
-						streamWriter.Close();
 					}
 				}
-				s.Close();
 				
 				this.MovePictures();
 				this.ReadResources();
@@ -256,43 +255,57 @@ namespace AODL.Document.Import.OpenDocument
 				this.ReadDocumentConfigurations2();
 
 				this._document.DocumentMetadata				= new DocumentMetadata(this._document);
-				this._document.DocumentMetadata.LoadFromFile(dir+DocumentMetadata.FileName);
+				if (this._unpackedFiles.ContainsKey(DocumentMetadata.FileName))
+					this._document.DocumentMetadata.LoadFromFile(Path.Combine(dir, DocumentMetadata.FileName));
+				else
+					this._document.DocumentMetadata.New();
 
 				if(this._document is TextDocument)
 				{
 					((TextDocument)this._document).DocumentSetting				= new  AODL.Document.TextDocuments.DocumentSetting();
 					string file		= AODL.Document.TextDocuments.DocumentSetting.FileName;
-					((TextDocument)this._document).DocumentSetting.LoadFromFile(dir+file);
+					if (this._unpackedFiles.ContainsKey(file))
+						((TextDocument)this._document).DocumentSetting.LoadFromFile(Path.Combine(dir, file));
+					else
+						((TextDocument)this._document).DocumentSetting.New();
 
 					((TextDocument)this._document).DocumentManifest				= new AODL.Document.TextDocuments.DocumentManifest();
 					string folder	= AODL.Document.TextDocuments.DocumentManifest.FolderName;
 					file			= AODL.Document.TextDocuments.DocumentManifest.FileName;
-					((TextDocument)this._document).DocumentManifest.LoadFromFile(dir+folder+"\\"+file);
+					((TextDocument)this._document).DocumentManifest.LoadFromFile(Path.Combine(Path.Combine(dir, folder), file));
 
 					((TextDocument)this._document).DocumentStyles				= new AODL.Document.TextDocuments.DocumentStyles();
 					file			= AODL.Document.TextDocuments.DocumentStyles.FileName;
-					((TextDocument)this._document).DocumentStyles.LoadFromFile(dir+file);
+					if (this._unpackedFiles.ContainsKey(file))
+						((TextDocument)this._document).DocumentStyles.LoadFromFile(Path.Combine(dir, file));
+					else
+						((TextDocument)this._document).DocumentStyles.New((TextDocument)this._document);
 				}
 				else if(this._document is SpreadsheetDocument)
 				{
 					((SpreadsheetDocument)this._document).DocumentSetting				= new  AODL.Document.SpreadsheetDocuments.DocumentSetting();
 					string file		= AODL.Document.SpreadsheetDocuments.DocumentSetting.FileName;
-					((SpreadsheetDocument)this._document).DocumentSetting.LoadFromFile(dir+file);
+					if (this._unpackedFiles.ContainsKey(file))
+						((SpreadsheetDocument)this._document).DocumentSetting.LoadFromFile(Path.Combine(dir, file));
+					else
+						((SpreadsheetDocument)this._document).DocumentSetting.New();
 
 					((SpreadsheetDocument)this._document).DocumentManifest				= new AODL.Document.SpreadsheetDocuments.DocumentManifest();
 					string folder	= AODL.Document.SpreadsheetDocuments.DocumentManifest.FolderName;
 					file			= AODL.Document.SpreadsheetDocuments.DocumentManifest.FileName;
-					((SpreadsheetDocument)this._document).DocumentManifest.LoadFromFile(dir+folder+"\\"+file);
+					((SpreadsheetDocument)this._document).DocumentManifest.LoadFromFile(Path.Combine(Path.Combine(dir, folder), file));
 
 					((SpreadsheetDocument)this._document).DocumentStyles				= new AODL.Document.SpreadsheetDocuments.DocumentStyles();
 					file			= AODL.Document.SpreadsheetDocuments.DocumentStyles.FileName;
-					((SpreadsheetDocument)this._document).DocumentStyles.LoadFromFile(dir
-						+file);
+					if (this._unpackedFiles.ContainsKey(file))
+						((SpreadsheetDocument)this._document).DocumentStyles.LoadFromFile(Path.Combine(dir, file));
+					else
+						((SpreadsheetDocument)this._document).DocumentStyles.New();
 				}
 
-				this._document.DocumentPictures				= this.ReadImageResources(dir+"Pictures");
+				this._document.DocumentPictures				= this.ReadImageResources(Path.Combine(dir, "Pictures"));
 
-				this._document.DocumentThumbnails			= this.ReadImageResources(dir+"Thumbnails");
+				this._document.DocumentThumbnails			= this.ReadImageResources(Path.Combine(dir, "Thumbnails"));
 
 				//There's no really need to read the fonts.
 
@@ -311,9 +324,9 @@ namespace AODL.Document.Import.OpenDocument
 		{
 			try
 			{
-				if(!Directory.Exists(dir+DocumentConfiguration2.FolderName))
+				if(!Directory.Exists(Path.Combine(dir, DocumentConfiguration2.FolderName)))
 					return;
-				DirectoryInfo di		= new DirectoryInfo(dir+DocumentConfiguration2.FolderName);
+				DirectoryInfo di		= new DirectoryInfo(Path.Combine(dir, DocumentConfiguration2.FolderName));
 				foreach(FileInfo fi	in di.GetFiles())
 				{
 					this._document.DocumentConfigurations2.FileName	= fi.Name;
@@ -369,7 +382,7 @@ namespace AODL.Document.Import.OpenDocument
 			try
 			{
 				this._document.XmlDoc			= new XmlDocument();
-				this._document.XmlDoc.Load(dir+"\\content.xml");
+				this._document.XmlDoc.Load(Path.Combine(dir, "content.xml"));
 
                 // Apply tweaks to fix compatibility issues. This currently does the following:
                 //  1. Expands repeated rows and columns.

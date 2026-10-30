@@ -41,9 +41,8 @@ namespace AODL.Document.Export.OpenDocument
 	public class OpenDocumentTextExporter : IExporter, IPublisherInfo
 	{
 		internal static Guid folderGuid			= Guid.NewGuid();
-		private static readonly string dir		= Environment.CurrentDirectory+@"\"+folderGuid.ToString()+@"\";
+		private static readonly string dir		= Path.Combine(Environment.CurrentDirectory, folderGuid.ToString());
 		private string[] _directories			= {"Configurations2", "META-INF", "Pictures", "Thumbnails"};
-		private IDocument _document				= null;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="OpenDocumentTextExporter"/> class.
@@ -95,36 +94,42 @@ namespace AODL.Document.Export.OpenDocument
 		{
 			try
 			{
-				this._document			= document;
 				PrepareDirectory(dir);
 				//Write content
 				if(document is TextDocument)
 				{
-					this.WriteSingleFiles(((TextDocument)document).DocumentManifest.Manifest, dir+DocumentManifest.FolderName+"\\"+DocumentManifest.FileName);
-					this.WriteSingleFiles(((TextDocument)document).DocumentMetadata.Meta, dir+DocumentMetadata.FileName);
-					this.WriteSingleFiles(((TextDocument)document).DocumentSetting.Settings, dir+DocumentSetting.FileName);
-					this.WriteSingleFiles(((TextDocument)document).DocumentStyles.Styles, dir+DocumentStyles.FileName);
-					this.WriteSingleFiles(((TextDocument)document).XmlDoc, dir+"content.xml");
+					TextDocument td = (TextDocument)document;
+					PrepareManifest(td.XmlDoc, td.DocumentStyles.Styles, td.DocumentMetadata.Meta,
+						td.DocumentSetting.Settings, td.DocumentManifest.Manifest);
+					this.WriteSingleFiles(td.DocumentManifest.Manifest, Path.Combine(Path.Combine(dir, DocumentManifest.FolderName), DocumentManifest.FileName));
+					this.WriteSingleFiles(td.DocumentMetadata.Meta, Path.Combine(dir, DocumentMetadata.FileName));
+					this.WriteSingleFiles(td.DocumentSetting.Settings, Path.Combine(dir, DocumentSetting.FileName));
+					this.WriteSingleFiles(td.DocumentStyles.Styles, Path.Combine(dir, DocumentStyles.FileName));
+					this.WriteSingleFiles(td.XmlDoc, Path.Combine(dir, "content.xml"));
 					//Save graphics, which were build during creating a new document
 					SaveGraphic(((TextDocument)document), dir);
 				}
 				else if(document is AODL.Document.SpreadsheetDocuments.SpreadsheetDocument)
 				{
-					this.WriteSingleFiles(((AODL.Document.SpreadsheetDocuments.SpreadsheetDocument)document).DocumentManifest.Manifest, dir+DocumentManifest.FolderName+"\\"+DocumentManifest.FileName);
-					this.WriteSingleFiles(((AODL.Document.SpreadsheetDocuments.SpreadsheetDocument)document).DocumentMetadata.Meta, dir+DocumentMetadata.FileName);
-					this.WriteSingleFiles(((AODL.Document.SpreadsheetDocuments.SpreadsheetDocument)document).DocumentSetting.Settings, dir+DocumentSetting.FileName);
-					this.WriteSingleFiles(((AODL.Document.SpreadsheetDocuments.SpreadsheetDocument)document).DocumentStyles.Styles, dir+DocumentStyles.FileName);
-					this.WriteSingleFiles(((AODL.Document.SpreadsheetDocuments.SpreadsheetDocument)document).XmlDoc, dir+"content.xml");
+					AODL.Document.SpreadsheetDocuments.SpreadsheetDocument sd =
+						(AODL.Document.SpreadsheetDocuments.SpreadsheetDocument)document;
+					PrepareManifest(sd.XmlDoc, sd.DocumentStyles.Styles, sd.DocumentMetadata.Meta,
+						sd.DocumentSetting.Settings, sd.DocumentManifest.Manifest);
+					this.WriteSingleFiles(sd.DocumentManifest.Manifest, Path.Combine(Path.Combine(dir, DocumentManifest.FolderName), DocumentManifest.FileName));
+					this.WriteSingleFiles(sd.DocumentMetadata.Meta, Path.Combine(dir, DocumentMetadata.FileName));
+					this.WriteSingleFiles(sd.DocumentSetting.Settings, Path.Combine(dir, DocumentSetting.FileName));
+					this.WriteSingleFiles(sd.DocumentStyles.Styles, Path.Combine(dir, DocumentStyles.FileName));
+					this.WriteSingleFiles(sd.XmlDoc, Path.Combine(dir, "content.xml"));
 				}
 				else
 					throw new Exception("Unsupported document type!");
 				//Write Pictures and Thumbnails
 //				this.SaveExistingGraphics(document.DocumentPictures, dir+"Pictures\\");
 //				this.SaveExistingGraphics(document.DocumentThumbnails, dir+"Thumbnails\\");
-				//Don't know why VS couldn't read a textfile resource without file prefix
-				WriteMimetypeFile(dir+@"\mimetyp");				
-				//Now create the document
-				CreateOpenDocument(filename, dir);
+				string mimeType = document is TextDocument
+					? "application/vnd.oasis.opendocument.text"
+					: "application/vnd.oasis.opendocument.spreadsheet";
+				CreateOpenDocument(filename, dir, mimeType);
 				//Clean up resources
 				//this.CleanUpDirectory(dir);
 			}
@@ -225,19 +230,75 @@ namespace AODL.Document.Export.OpenDocument
 		/// </summary>
 		/// <param name="filename">The filename.</param>
 		/// <param name="directory">The directory to zip.</param>
-		private static void CreateOpenDocument(string filename, string directory)
+		private static void CreateOpenDocument(string filename, string directory, string mimeType)
 		{
-			try
+			using (ZipOutputStream zip = new ZipOutputStream(File.Create(filename)))
 			{
-				FastZip fz = new FastZip();
-				fz.CreateEmptyDirectories = true;
-				fz.CreateZip(filename, directory, true, "");
-				fz			= null;
+				byte[] mime = System.Text.Encoding.ASCII.GetBytes(mimeType);
+				Crc32 crc = new Crc32();
+				crc.Update(mime);
+				ZipEntry first = new ZipEntry("mimetype");
+				first.CompressionMethod = CompressionMethod.Stored;
+				first.Size = mime.Length;
+				first.Crc = crc.Value;
+				first.ExtraData = new byte[0];
+				zip.PutNextEntry(first);
+				zip.Write(mime, 0, mime.Length);
+				zip.CloseEntry();
+
+				string[] paths = Directory.GetFiles(directory, "*", SearchOption.AllDirectories);
+				Array.Sort(paths, StringComparer.Ordinal);
+				foreach (string path in paths)
+				{
+					string name = path.Substring(directory.Length)
+						.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+						.Replace('\\', '/');
+					if (name == "mimetype") continue;
+					zip.PutNextEntry(new ZipEntry(name));
+					using (FileStream input = File.OpenRead(path))
+					{
+						byte[] buffer = new byte[8192];
+						int count;
+						while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
+							zip.Write(buffer, 0, count);
+					}
+					zip.CloseEntry();
+				}
+				zip.Finish();
 			}
-			catch(Exception ex)
+		}
+
+		private static void PrepareManifest(XmlDocument content, XmlDocument styles,
+			XmlDocument meta, XmlDocument settings, XmlDocument manifest)
+		{
+			const string officeNs = "urn:oasis:names:tc:opendocument:xmlns:office:1.0";
+			const string manifestNs = "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0";
+			XmlNamespaceManager ns = new XmlNamespaceManager(manifest.NameTable);
+			ns.AddNamespace("manifest", manifestNs);
+
+			string[] xmlFiles = { "content.xml", "styles.xml", "meta.xml", "settings.xml" };
+			foreach (string file in xmlFiles)
 			{
-				throw;
+				XmlElement entry = manifest.SelectSingleNode(
+					"/manifest:manifest/manifest:file-entry[@manifest:full-path='" + file + "']", ns) as XmlElement;
+				if (entry == null)
+				{
+					entry = manifest.CreateElement("manifest", "file-entry", manifestNs);
+					entry.SetAttribute("full-path", manifestNs, file);
+					entry.SetAttribute("media-type", manifestNs, "text/xml");
+					manifest.DocumentElement.AppendChild(entry);
+				}
 			}
+
+			string version = content.DocumentElement.GetAttribute("version", officeNs);
+			if (version != "1.2" && version != "1.3" && version != "1.4") return;
+			styles.DocumentElement.SetAttribute("version", officeNs, version);
+			meta.DocumentElement.SetAttribute("version", officeNs, version);
+			settings.DocumentElement.SetAttribute("version", officeNs, version);
+			manifest.DocumentElement.SetAttribute("version", manifestNs, version);
+			XmlElement root = manifest.SelectSingleNode(
+				"/manifest:manifest/manifest:file-entry[@manifest:full-path='/']", ns) as XmlElement;
+			if (root != null) root.SetAttribute("version", manifestNs, version);
 		}
 
 		/// <summary>
@@ -252,42 +313,12 @@ namespace AODL.Document.Export.OpenDocument
 					Directory.Delete(directory, true);
 
 				foreach(string d in this._directories)
-					Directory.CreateDirectory(directory+@"\"+d);
+					Directory.CreateDirectory(Path.Combine(directory, d));
 			}
 			catch(Exception ex)
 			{
 				throw;
 			}	
-		}
-
-		/// <summary>
-		/// Helper Method: Don't know why, but it seems to be impossible
-		/// to embbed a textfile as resource
-		/// </summary>
-		/// <param name="file">The filename.</param>
-		private void WriteMimetypeFile(string file)
-		{
-			//Don't know why, but it seems to be impossible
-			//to embbed a textfile as resource
-			try
-			{
-				if(File.Exists(file))
-					File.Delete(file);
-				StreamWriter sw = File.CreateText(file);
-				if(this._document is AODL.Document.TextDocuments.TextDocument)
-				{
-					sw.WriteLine("application/vnd.oasis.opendocument.text");
-				}
-				else if(this._document is AODL.Document.SpreadsheetDocuments.SpreadsheetDocument)
-				{
-					sw.WriteLine("application/vnd.oasis.opendocument.spreadsheet");
-				}
-				sw.Close();
-			}
-			catch(Exception ex)
-			{
-				throw;
-			}
 		}
 
 		#region old code Todo: Delete
@@ -397,7 +428,7 @@ namespace AODL.Document.Export.OpenDocument
 		{
 			try
 			{
-				string picturedir		= directory+@"\Pictures\";
+				string picturedir		= Path.Combine(directory, "Pictures");
 
 				foreach(Graphic graphic in document.Graphics)
 				{
@@ -407,11 +438,11 @@ namespace AODL.Document.Export.OpenDocument
 						if(graphic.GraphicFileName == null)
 						{
 							FileInfo fInfo	= new FileInfo(graphic.GraphicRealPath);
-							if(!File.Exists(picturedir+fInfo.Name))
-								File.Copy(graphic.GraphicRealPath, picturedir+fInfo.Name);
+							if(!File.Exists(Path.Combine(picturedir, fInfo.Name)))
+								File.Copy(graphic.GraphicRealPath, Path.Combine(picturedir, fInfo.Name));
 						}
 						else
-							File.Copy(graphic.GraphicRealPath, picturedir+graphic.GraphicFileName);
+							File.Copy(graphic.GraphicRealPath, Path.Combine(picturedir, graphic.GraphicFileName));
 					}					
 				}
 				MovePicturesIfLoaded(document, picturedir);

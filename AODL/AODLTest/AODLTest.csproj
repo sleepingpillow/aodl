@@ -118,6 +118,9 @@
       <HintPath>C:\Program Files\Develop\NUnit 2.2\bin\nunit.framework.dll</HintPath>
       <AssemblyFolderKey>hklm\dn\nunit.framework</AssemblyFolderKey>
     </Reference>
+    <Reference Include="ICSharpCode.SharpZipLib">
+      <HintPath>..\AODL\Resources\ICSharpCode.SharpZipLib.dll</HintPath>
+    </Reference>
     <Reference Include="System">
       <Name>System</Name>
     </Reference>
@@ -141,6 +144,7 @@
     <Compile Include="DocumentImportTest.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="OpenDocumentPackageTests.cs" />
     <Compile Include="FrameTest.cs">
       <SubType>Code</SubType>
     </Compile>

@@ -430,6 +430,8 @@ namespace AODL.Document.SpreadsheetDocuments
 				Stream str				= ass.GetManifestResourceStream("AODL.Resources.OD.spreadsheetcontent.xml");
 				this._xmldoc			= new XmlDocument();
 				this._xmldoc.Load(str);
+				this._xmldoc.DocumentElement.SetAttribute("version",
+					"urn:oasis:names:tc:opendocument:xmlns:office:1.0", "1.4");
 			}
 			catch(Exception ex)
 			{
